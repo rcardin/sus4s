@@ -1,12 +1,30 @@
+import scala.collection.Seq
+
 val scala3Version = "3.4.1"
 
-lazy val root = project
-  .in(file("."))
+lazy val core = project
   .settings(
-    name := "sus4s",
-    version := "0.1.0-SNAPSHOT",
-
+    name := "core",
     scalaVersion := scala3Version,
-
-    libraryDependencies += "org.scalameta" %% "munit" % "0.7.29" % Test
+    libraryDependencies ++= commonDependencies
   )
+
+lazy val root = (project in file("."))
+  .aggregate(core)
+  .settings(
+    scalaVersion := scala3Version,
+  )
+
+lazy val dependencies =
+  new {
+    val scalatestVersion = "3.2.17"
+    val scalatest = "org.scalatest" %% "scalatest" % scalatestVersion
+  }
+
+lazy val commonDependencies = Seq(
+  dependencies.scalatest % Test
+)
+
+libraryDependencies ++= Seq(
+  "org.scalatest" %% "scalatest" % "3.2.17" % Test
+)
