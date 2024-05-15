@@ -18,6 +18,9 @@ inThisBuild(
   )
 )
 
+ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
+sonatypeRepository                 := "https://s01.oss.sonatype.org/service/local"
+
 lazy val core = project
   .settings(
     name := "core",
