@@ -38,9 +38,9 @@ val result: Int = structured {
 println(result) // 85
 ```
 
-The `structured` method creates a new structured concurrency scope. It's built on top of
-the `java.util.concurrent.StructuredTaskScope` class. Hence, the threads forked inside the `structured` block are Java
-Virtual Threads.
+The `structured` method creates a new structured concurrency scope represented by the `Suspend` trait. It's built on top
+of the `java.util.concurrent.StructuredTaskScope` class. Hence, the threads forked inside the `structured` block are
+Java Virtual Threads.
 
 The `fork` method creates a new Java Virtual Thread that executes the given block of code. The `fork` method executes
 functions declared with the capability of suspend:

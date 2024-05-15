@@ -2,6 +2,22 @@ import scala.collection.Seq
 
 val scala3Version = "3.4.1"
 
+inThisBuild(
+  List(
+    organization := "in.rcard.sus4s",
+    homepage     := Some(url("https://github.com/rcardin")),
+    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    developers := List(
+      Developer(
+        "rcardin",
+        "Riccardo Cardin",
+        "riccardo DOT cardin AT gmail.com",
+        url("https://github.com/rcardin/sus4s")
+      )
+    )
+  )
+)
+
 lazy val core = project
   .settings(
     name := "core",
