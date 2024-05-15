@@ -22,7 +22,7 @@ Scala 3. Moreover, Java preview features must be enabled in the Scala compiler.
 The main entry point is the `sus4s` package object. The following code snippet shows how to use the library:
 
 ```scala 3
-import sus4s.*
+import in.rcard.sus4s.sus4s.*
 
 val result: Int = structured {
   val job1: Job[Int] = fork {
@@ -75,7 +75,7 @@ thread executing the block waits for the completion of all the forked tasks. The
 - one of the forked tasks throws an exception
 - the block throws an exception
 
-The structured function is completely transparent to any exception thrown by the block or by any of the forked tasks.
+The `structured` function is completely transparent to any exception thrown by the block or by any of the forked tasks.
 
 ## Contributing
 
