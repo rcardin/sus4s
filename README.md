@@ -12,7 +12,7 @@ A Direct-Style Scala Wrapper Around the Structural Concurrency of Project Loom
 The library is available on Maven Central. To use it, add the following dependency to your `build.sbt` files:
 
 ```sbt
-libraryDependencies += "in.rcard.sus4s" % "core_3" % "0.0.1"
+libraryDependencies += "in.rcard.sus4s" %% "core" % "0.0.1"
 ```
 
 The library is only available for Scala 3.
