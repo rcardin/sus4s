@@ -1,5 +1,5 @@
 import in.rcard.sus4s.sus4s
-import in.rcard.sus4s.sus4s.{fork, structured}
+import in.rcard.sus4s.sus4s.{fork, forkCancellable, structured}
 import org.scalatest.TryValues.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -98,5 +98,27 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
 
     queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
     result shouldBe 85
+  }
+
+  it should "cancel at the first suspending point" in {
+    val queue = new ConcurrentLinkedQueue[String]()
+    val result = structured {
+      val cancellable = forkCancellable {
+        while (true) {
+          Thread.sleep(2000)
+          println("cancellable job")
+          queue.add("cancellable")
+        }
+      }
+      val job = fork {
+        cancellable.cancel()
+        queue.add("job2")
+        43
+      }
+      job.value
+    }
+
+    queue.toArray should contain theSameElementsInOrderAs List("job2")
+    result shouldBe 43
   }
 }
