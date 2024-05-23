@@ -1,8 +1,6 @@
 package in.rcard.sus4s
 
-import java.util.concurrent.StructuredTaskScope.Subtask
-import java.util.concurrent.{CompletableFuture, ExecutionException, StructuredTaskScope}
-import scala.compiletime.uninitialized
+import java.util.concurrent.{CompletableFuture, StructuredTaskScope}
 
 object sus4s {
 
@@ -22,18 +20,14 @@ object sus4s {
     * @tparam A
     *   The type of the value returned by the job
     */
-  class Job[A] private[sus4s] (private val cf: CompletableFuture[A]) {
+  class Job[A] private[sus4s] (
+      private val cf: CompletableFuture[A],
+      private val executingThread: CompletableFuture[Thread]
+  ) {
     def value: A = cf.get()
-  }
-
-  class CancellableJob[A] private[sus4s] (val cf: CompletableFuture[A]) extends Job[A](cf) {
-    var scope: StructuredTaskScope[Any] = uninitialized
     def cancel(): Unit = {
+      executingThread.get().interrupt()
       cf.completeExceptionally(new InterruptedException("Job cancelled"))
-      try
-        cf.get()
-      catch
-        case e =>
     }
   }
 
@@ -122,60 +116,18 @@ object sus4s {
     *   [[structured]]
     */
   def fork[A](block: Suspend ?=> A): Suspend ?=> Job[A] = {
-    val result = new CompletableFuture[A]()
+    val result          = new CompletableFuture[A]()
+    val executingThread = new CompletableFuture[Thread]()
     summon[Suspend].scope.fork(() => {
+      executingThread.complete(Thread.currentThread())
       try result.complete(block)
       catch
+        case _: InterruptedException =>
+          result.completeExceptionally(new InterruptedException("Job cancelled"))
         case throwable: Throwable =>
           result.completeExceptionally(throwable)
           throw throwable;
     })
-    Job(result)
-  }
-
-  def forkCancellable[A](block: Suspend ?=> A): Suspend ?=> CancellableJob[A] = {
-    val result         = new CompletableFuture[A]()
-    val innerResult    = new CompletableFuture[A]()
-    val cancellableJob = CancellableJob(innerResult)
-    summon[Suspend].scope.fork(() => {
-      val innerScope = new StructuredTaskScope.ShutdownOnFailure()
-      cancellableJob.scope = innerScope
-
-      given innerSuspended: Suspend = new Suspend {
-        override val scope: StructuredTaskScope[Any] = innerScope
-      }
-      try {
-        val subtask = innerScope.fork(() => {
-          val result = block(using innerSuspended)
-          innerResult.complete(result)
-          result
-        })
-        try
-          innerResult.get()
-        catch
-          case e: Throwable  =>
-            innerScope.shutdown()
-        innerScope.join().throwIfFailed(identity)
-        if (subtask.state() == Subtask.State.UNAVAILABLE) {
-          // TODO Handle all cases
-          result.completeExceptionally(new InterruptedException("Job cancelled"))
-        } else {
-          result.complete(subtask.get())
-        }
-      } catch
-        case exex: ExecutionException =>
-          exex.getCause match
-            case ie: InterruptedException => innerScope.shutdown()
-            case e: Throwable =>
-              result.completeExceptionally(e)
-              throw e
-        case e: Throwable =>
-          result.completeExceptionally(e)
-          throw e
-      finally {
-        innerScope.close()
-      }
-    })
-    cancellableJob
+    Job(result, executingThread)
   }
 }
