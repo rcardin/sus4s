@@ -12,6 +12,7 @@ object sus4s {
     private[sus4s] val scope: StructuredTaskScope[Any]
   }
 
+  //noinspection ScalaWeakerAccess
   final class SuspendScope(override private[sus4s] val scope: StructuredTaskScope[Any])
       extends Suspend {
     private[sus4s] val relationships = scala.collection.mutable.Map.empty[Thread, List[Thread]]
