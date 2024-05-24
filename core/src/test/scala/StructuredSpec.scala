@@ -120,13 +120,12 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     results.toArray should contain theSameElementsInOrderAs List("3", "2", "1")
   }
 
-  it should "cancel at the first suspending point" in {
+  "cancellation" should "cancel at the first suspending point" in {
     val queue = new ConcurrentLinkedQueue[String]()
     val result = structured {
       val cancellable = fork {
         while (true) {
           Thread.sleep(2000)
-          println("cancellable job")
           queue.add("cancellable")
         }
       }
@@ -138,8 +137,54 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
       }
       job.value
     }
+  }
 
+  it should "not throw an exception if joined" in {
+    val queue = new ConcurrentLinkedQueue[String]()
+    val result = structured {
+      val cancellable = fork {
+        while (true) {
+          Thread.sleep(2000)
+          queue.add("cancellable")
+        }
+      }
+      val job = fork {
+        Thread.sleep(500)
+        cancellable.cancel()
+        queue.add("job2")
+        43
+      }
+      cancellable.join()
+      job.value
+    }
     queue.toArray should contain theSameElementsInOrderAs List("job2")
     result shouldBe 43
   }
+
+  it should "not cancel parent job" in {
+    val queue = new ConcurrentLinkedQueue[String]()
+    val result = structured {
+      val job1 = fork {
+        val innerCancellableJob = fork {
+          while (true) {
+            Thread.sleep(2000)
+            queue.add("cancellable")
+          }
+        }
+        Thread.sleep(1000)
+        innerCancellableJob.cancel()
+        queue.add("job1")
+      }
+      val job = fork {
+        Thread.sleep(500)
+        queue.add("job2")
+        43
+      }
+      job.value
+    }
+    queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
+    result shouldBe 43
+  }
+  
+  
 }

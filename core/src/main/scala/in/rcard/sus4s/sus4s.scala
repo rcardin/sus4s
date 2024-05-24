@@ -25,6 +25,14 @@ object sus4s {
       private val executingThread: CompletableFuture[Thread]
   ) {
     def value: A = cf.get()
+    def join(): Unit =
+      cf.handle((_, throwable) => {
+        throwable match {
+          case null                    => ()
+          case _: InterruptedException => ()
+          case _                       => throw throwable
+        }
+      })
     def cancel(): Unit = {
       executingThread.get().interrupt()
       cf.completeExceptionally(new InterruptedException("Job cancelled"))
