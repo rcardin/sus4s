@@ -185,6 +185,41 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
     result shouldBe 43
   }
-  
-  
+
+  it should "cancel children jobs" in {
+    val queue = new ConcurrentLinkedQueue[String]()
+    val result = structured {
+      val job1 = fork {
+        val innerJob = fork {
+
+//          fork {
+//            while (true) {
+//              Thread.sleep(2000)
+//              println("inner-inner-Job")
+//              queue.add("inner-inner-Job")
+//            }
+//          }
+
+          while (true) {
+            Thread.sleep(2000)
+            println("innerJob")
+            queue.add("innerJob")
+          }
+        }
+        Thread.sleep(1000)
+        queue.add("job1")
+      }
+      val job = fork {
+        Thread.sleep(500)
+        job1.cancel()
+        queue.add("job2")
+        43
+      }
+      job.value
+    }
+    queue.toArray should contain theSameElementsInOrderAs List("job2")
+    result shouldBe 43
+  }
+
+
 }

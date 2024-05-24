@@ -1,5 +1,6 @@
 package in.rcard.sus4s
 
+import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure
 import java.util.concurrent.{CompletableFuture, StructuredTaskScope}
 
 object sus4s {
@@ -9,6 +10,11 @@ object sus4s {
     */
   trait Suspend {
     private[sus4s] val scope: StructuredTaskScope[Any]
+  }
+
+  final class SuspendScope(override private[sus4s] val scope: StructuredTaskScope[Any])
+      extends Suspend {
+    private[sus4s] val relationships = scala.collection.mutable.Map.empty[Thread, List[Thread]]
   }
 
   /** A value of type `A` obtained by a function that can suspend */
@@ -33,7 +39,12 @@ object sus4s {
           case _                       => throw throwable
         }
       })
-    def cancel(): Unit = {
+    def cancel(): Suspend ?=> Unit = {
+      summon[Suspend].asInstanceOf[SuspendScope].relationships.get(executingThread.get()) match {
+        case Some(children) =>
+          children.foreach(_.interrupt())
+        case None => ()
+      }
       executingThread.get().interrupt()
       cf.completeExceptionally(new InterruptedException("Job cancelled"))
     }
@@ -80,20 +91,17 @@ object sus4s {
     *   The result of the block
     */
   inline def structured[A](inline block: Suspend ?=> A): A = {
-    val _scope = new StructuredTaskScope.ShutdownOnFailure()
-
-    given suspended: Suspend = new Suspend {
-      override val scope: StructuredTaskScope[Any] = _scope
-    }
+    val loomScope = new ShutdownOnFailure()
+    given suspended: Suspend = SuspendScope(loomScope)
 
     try {
-      val mainTask = _scope.fork(() => {
+      val mainTask = loomScope.fork(() => {
         block
       })
-      _scope.join().throwIfFailed(identity)
+      loomScope.join().throwIfFailed(identity)
       mainTask.get()
     } finally {
-      _scope.close()
+      loomScope.close()
     }
   }
 
@@ -124,10 +132,17 @@ object sus4s {
     *   [[structured]]
     */
   def fork[A](block: Suspend ?=> A): Suspend ?=> Job[A] = {
-    val result          = new CompletableFuture[A]()
-    val executingThread = new CompletableFuture[Thread]()
-    summon[Suspend].scope.fork(() => {
-      executingThread.complete(Thread.currentThread())
+    val result                     = new CompletableFuture[A]()
+    val executingThread            = new CompletableFuture[Thread]()
+    val suspendScope: SuspendScope = summon[Suspend].asInstanceOf[SuspendScope]
+    val parentThread: Thread       = Thread.currentThread()
+    suspendScope.scope.fork(() => {
+      val childThread = Thread.currentThread()
+      suspendScope.relationships.updateWith(parentThread) {
+        case None    => Some(List(childThread))
+        case Some(l) => Some(childThread :: l)
+      }
+      executingThread.complete(childThread)
       try result.complete(block)
       catch
         case _: InterruptedException =>
