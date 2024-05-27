@@ -80,6 +80,41 @@ thread executing the block waits for the completion of all the forked tasks. The
 
 The `structured` function is completely transparent to any exception thrown by the block or by any of the forked tasks.
 
+## Canceling a Job
+
+It's possible to cancel a job by calling the `cancel` method on the `Job` instance. The following code snippet shows how:
+
+```scala 3
+val queue = new ConcurrentLinkedQueue[String]()
+val result = structured {
+  val job1 = fork {
+    val innerCancellableJob = fork {
+      while (true) {
+        Thread.sleep(2000)
+        queue.add("cancellable")
+      }
+    }
+    Thread.sleep(1000)
+    innerCancellableJob.cancel()
+    queue.add("job1")
+  }
+  val job = fork {
+    Thread.sleep(500)
+    queue.add("job2")
+    43
+  }
+  job.value
+}
+queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
+result shouldBe 43
+```
+
+Cancellation is collaborative. In the above example, the job `innerCancellableJob` is marked for cancellation by the call
+`innerCancellableJob.cancel()`. However, the job is not immediately canceled. The job is canceled when it reaches the first
+point operation that can be _interrupted_ by the JVM. Hence, cancellation is based upon the concept of interruption. In
+the above example, the `innerCancellableJob` is canceled when it reaches the `Thread.sleep(2000)` operation. If we remove
+the `Thread.sleep` operation, the job will never be canceled. A similar behavior is implemented by Kotlin coroutines (see [Kotlin Coroutines - A Comprehensive Introduction / Cancellation](https://blog.rockthejvm.com/kotlin-coroutines-101/#7-cancellation) for further details).
+
 ## Contributing
 
 If you want to contribute to the project, please do it! Any help is welcome.
