@@ -192,13 +192,13 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
       val job1 = fork {
         val innerJob = fork {
 
-//          fork {
-//            while (true) {
-//              Thread.sleep(2000)
-//              println("inner-inner-Job")
-//              queue.add("inner-inner-Job")
-//            }
-//          }
+          fork {
+            while (true) {
+              Thread.sleep(2000)
+              println("inner-inner-Job")
+              queue.add("inner-inner-Job")
+            }
+          }
 
           while (true) {
             Thread.sleep(2000)

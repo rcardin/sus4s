@@ -12,7 +12,7 @@ object sus4s {
     private[sus4s] val scope: StructuredTaskScope[Any]
   }
 
-  //noinspection ScalaWeakerAccess
+  // noinspection ScalaWeakerAccess
   final class SuspendScope(override private[sus4s] val scope: StructuredTaskScope[Any])
       extends Suspend {
     private[sus4s] val relationships = scala.collection.mutable.Map.empty[Thread, List[Thread]]
@@ -41,13 +41,21 @@ object sus4s {
         }
       })
     def cancel(): Suspend ?=> Unit = {
-      summon[Suspend].asInstanceOf[SuspendScope].relationships.get(executingThread.get()) match {
+      // FIXME Refactor this code
+      _cancel(executingThread.get(), summon[Suspend].asInstanceOf[SuspendScope].relationships)
+      cf.completeExceptionally(new InterruptedException("Job cancelled"))
+    }
+
+    private def _cancel(
+        thread: Thread,
+        relationships: scala.collection.mutable.Map[Thread, List[Thread]]
+    ): Unit = {
+      relationships.get(thread) match {
         case Some(children) =>
-          children.foreach(_.interrupt())
+          children.foreach(_cancel(_, relationships))
         case None => ()
       }
-      executingThread.get().interrupt()
-      cf.completeExceptionally(new InterruptedException("Job cancelled"))
+      thread.interrupt()
     }
   }
 
@@ -92,7 +100,7 @@ object sus4s {
     *   The result of the block
     */
   inline def structured[A](inline block: Suspend ?=> A): A = {
-    val loomScope = new ShutdownOnFailure()
+    val loomScope            = new ShutdownOnFailure()
     given suspended: Suspend = SuspendScope(loomScope)
 
     try {
