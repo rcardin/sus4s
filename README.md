@@ -123,9 +123,39 @@ result shouldBe 43
 
 Cancellation is collaborative. In the above example, the job `innerCancellableJob` is marked for cancellation by the call `innerCancellableJob.cancel()`. However, the job is not immediately canceled. The job is canceled when it reaches the first point operation that can be _interrupted_ by the JVM. Hence, cancellation is based upon the concept of interruption. In the above example, the `innerCancellableJob` is canceled when it reaches the `Thread.sleep(2000)` operation. If we remove the `Thread.sleep` operation, the job will never be canceled. A similar behavior is implemented by Kotlin coroutines (see [Kotlin Coroutines - A Comprehensive Introduction / Cancellation](https://blog.rockthejvm.com/kotlin-coroutines-101/#7-cancellation) for further details).
 
+Cancelling a job follows the relationship between parent and child jobs. If a parent job is canceled, all the child jobs are canceled as well:
+
+```scala 3
+val expectedQueue = structured {
+  val queue = new ConcurrentLinkedQueue[String]()
+  val job1 = fork {
+    val innerJob = fork {
+      fork {
+        Thread.sleep(3000)
+        println("inner-inner-Job")
+        queue.add("inner-inner-Job")
+      }
+      Thread.sleep(2000)
+      println("innerJob")
+      queue.add("innerJob")
+    }
+    Thread.sleep(1000)
+    queue.add("job1")
+  }
+  val job = fork {
+    Thread.sleep(500)
+    job1.cancel()
+    queue.add("job2")
+    43
+  }
+  queue
+}
+expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+```
+
 Trying to get the value from a canceled job will throw a `InterruptedException`. However, joining a canceled job will not throw any exception.
 
-You won't pay any additional cost for canceling a job. The cancellation mechanism is based on the interruption of the virtual thread. No new structured scope is created for the cancellation mechanism.
+**You won't pay any additional cost for canceling a job**. The cancellation mechanism is based on the interruption of the virtual thread. No new structured scope is created for the cancellation mechanism.
 
 ## Contributing
 
