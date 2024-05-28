@@ -2,6 +2,7 @@ package in.rcard.sus4s
 
 import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure
 import java.util.concurrent.{CompletableFuture, StructuredTaskScope}
+import scala.concurrent.ExecutionException
 
 object sus4s {
 
@@ -31,7 +32,11 @@ object sus4s {
       private val cf: CompletableFuture[A],
       private val executingThread: CompletableFuture[Thread]
   ) {
-    def value: A = cf.get()
+    def value: A = try cf.get()
+    catch
+      case exex: ExecutionException => throw exex.getCause
+      case throwable: Throwable     => throw throwable
+
     def join(): Unit =
       cf.handle((_, throwable) => {
         throwable match {
@@ -40,6 +45,7 @@ object sus4s {
           case _                       => throw throwable
         }
       })
+
     def cancel(): Suspend ?=> Unit = {
       // FIXME Refactor this code
       _cancel(executingThread.get(), summon[Suspend].asInstanceOf[SuspendScope].relationships)

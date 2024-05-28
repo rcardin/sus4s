@@ -221,5 +221,34 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     result shouldBe 43
   }
 
+  it should "not throw any exception when joining a cancelled job" in {
+    val expected = structured {
+      val cancellable = fork {
+        while (true) {
+          Thread.sleep(2000)
+        }
+      }
+      Thread.sleep(500)
+      cancellable.cancel()
+      cancellable.join()
+      42
+    }
 
+    expected shouldBe 42
+  }
+
+  it should "throw an exception when asking for the value of a cancelled job" in {
+    assertThrows[InterruptedException] {
+      structured {
+        val cancellable = fork {
+          while (true) {
+            Thread.sleep(2000)
+          }
+        }
+        Thread.sleep(500)
+        cancellable.cancel()
+        cancellable.value
+      }
+    }
+  }
 }
