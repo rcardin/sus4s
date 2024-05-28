@@ -121,55 +121,49 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
   }
 
   "cancellation" should "cancel at the first suspending point" in {
-    val queue = new ConcurrentLinkedQueue[String]()
-    val result = structured {
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
       val cancellable = fork {
-        while (true) {
-          Thread.sleep(2000)
-          queue.add("cancellable")
-        }
+        Thread.sleep(2000)
+        queue.add("cancellable")
       }
       val job = fork {
         Thread.sleep(500)
         cancellable.cancel()
         queue.add("job2")
-        43
       }
-      job.value
+      queue
     }
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
   }
 
   it should "not throw an exception if joined" in {
-    val queue = new ConcurrentLinkedQueue[String]()
-    val result = structured {
+
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
       val cancellable = fork {
-        while (true) {
-          Thread.sleep(2000)
-          queue.add("cancellable")
-        }
+        Thread.sleep(2000)
+        queue.add("cancellable")
       }
       val job = fork {
         Thread.sleep(500)
         cancellable.cancel()
         queue.add("job2")
-        43
       }
       cancellable.join()
-      job.value
+      queue
     }
-    queue.toArray should contain theSameElementsInOrderAs List("job2")
-    result shouldBe 43
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
   }
 
   it should "not cancel parent job" in {
-    val queue = new ConcurrentLinkedQueue[String]()
-    val result = structured {
+
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
       val job1 = fork {
         val innerCancellableJob = fork {
-          while (true) {
-            Thread.sleep(2000)
-            queue.add("cancellable")
-          }
+          Thread.sleep(2000)
+          queue.add("cancellable")
         }
         Thread.sleep(1000)
         innerCancellableJob.cancel()
@@ -178,33 +172,26 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
       val job = fork {
         Thread.sleep(500)
         queue.add("job2")
-        43
       }
-      job.value
+      queue
     }
-    queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
-    result shouldBe 43
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
   }
 
   it should "cancel children jobs" in {
-    val queue = new ConcurrentLinkedQueue[String]()
-    val result = structured {
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
       val job1 = fork {
         val innerJob = fork {
-
           fork {
-            while (true) {
-              Thread.sleep(2000)
-              println("inner-inner-Job")
-              queue.add("inner-inner-Job")
-            }
+            Thread.sleep(3000)
+            println("inner-inner-Job")
+            queue.add("inner-inner-Job")
           }
 
-          while (true) {
-            Thread.sleep(2000)
-            println("innerJob")
-            queue.add("innerJob")
-          }
+          Thread.sleep(2000)
+          println("innerJob")
+          queue.add("innerJob")
         }
         Thread.sleep(1000)
         queue.add("job1")
@@ -215,18 +202,15 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
         queue.add("job2")
         43
       }
-      job.value
+      queue
     }
-    queue.toArray should contain theSameElementsInOrderAs List("job2")
-    result shouldBe 43
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
   }
 
   it should "not throw any exception when joining a cancelled job" in {
     val expected = structured {
       val cancellable = fork {
-        while (true) {
-          Thread.sleep(2000)
-        }
+        Thread.sleep(2000)
       }
       Thread.sleep(500)
       cancellable.cancel()
@@ -241,9 +225,7 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     assertThrows[InterruptedException] {
       structured {
         val cancellable = fork {
-          while (true) {
-            Thread.sleep(2000)
-          }
+          Thread.sleep(2000)
         }
         Thread.sleep(500)
         cancellable.cancel()
