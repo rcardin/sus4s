@@ -99,4 +99,151 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
     result shouldBe 85
   }
+
+  it should "wait for children jobs to finish" in {
+    val results = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
+      val job1 = fork {
+        fork {
+          Thread.sleep(1000)
+          queue.add("1")
+        }
+        fork {
+          Thread.sleep(500)
+          queue.add("2")
+        }
+        queue.add("3")
+      }
+      queue
+    }
+
+    results.toArray should contain theSameElementsInOrderAs List("3", "2", "1")
+  }
+
+  "cancellation" should "cancel at the first suspending point" in {
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
+      val cancellable = fork {
+        Thread.sleep(2000)
+        queue.add("cancellable")
+      }
+      val job = fork {
+        Thread.sleep(500)
+        cancellable.cancel()
+        queue.add("job2")
+      }
+      queue
+    }
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+  }
+
+  it should "not throw an exception if joined" in {
+
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
+      val cancellable = fork {
+        Thread.sleep(2000)
+        queue.add("cancellable")
+      }
+      val job = fork {
+        Thread.sleep(500)
+        cancellable.cancel()
+        queue.add("job2")
+      }
+      cancellable.join()
+      queue
+    }
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+  }
+
+  it should "not cancel parent job" in {
+
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
+      val job1 = fork {
+        val innerCancellableJob = fork {
+          Thread.sleep(2000)
+          queue.add("cancellable")
+        }
+        Thread.sleep(1000)
+        innerCancellableJob.cancel()
+        queue.add("job1")
+      }
+      val job = fork {
+        Thread.sleep(500)
+        queue.add("job2")
+      }
+      queue
+    }
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
+  }
+
+  it should "cancel children jobs" in {
+    val expectedQueue = structured {
+      val queue = new ConcurrentLinkedQueue[String]()
+      val job1 = fork {
+        val innerJob = fork {
+          fork {
+            Thread.sleep(3000)
+            println("inner-inner-Job")
+            queue.add("inner-inner-Job")
+          }
+
+          Thread.sleep(2000)
+          println("innerJob")
+          queue.add("innerJob")
+        }
+        Thread.sleep(1000)
+        queue.add("job1")
+      }
+      val job = fork {
+        Thread.sleep(500)
+        job1.cancel()
+        queue.add("job2")
+      }
+      queue
+    }
+    expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+  }
+
+  it should "not throw any exception when joining a cancelled job" in {
+    val expected = structured {
+      val cancellable = fork {
+        Thread.sleep(2000)
+      }
+      Thread.sleep(500)
+      cancellable.cancel()
+      cancellable.join()
+      42
+    }
+
+    expected shouldBe 42
+  }
+
+  it should "not throw any exception if a job is canceled twice" in {
+    val expected = structured {
+      val cancellable = fork {
+        Thread.sleep(2000)
+      }
+      Thread.sleep(500)
+      cancellable.cancel()
+      cancellable.cancel()
+      42
+    }
+
+    expected shouldBe 42
+  }
+
+  it should "throw an exception when asking for the value of a cancelled job" in {
+    assertThrows[InterruptedException] {
+      structured {
+        val cancellable = fork {
+          Thread.sleep(2000)
+        }
+        Thread.sleep(500)
+        cancellable.cancel()
+        cancellable.value
+      }
+    }
+  }
 }

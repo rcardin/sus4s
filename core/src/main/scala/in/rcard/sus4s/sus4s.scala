@@ -1,6 +1,8 @@
 package in.rcard.sus4s
 
+import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure
 import java.util.concurrent.{CompletableFuture, StructuredTaskScope}
+import scala.concurrent.ExecutionException
 
 object sus4s {
 
@@ -9,6 +11,12 @@ object sus4s {
     */
   trait Suspend {
     private[sus4s] val scope: StructuredTaskScope[Any]
+  }
+
+  // noinspection ScalaWeakerAccess
+  final class SuspendScope(override private[sus4s] val scope: StructuredTaskScope[Any])
+      extends Suspend {
+    private[sus4s] val relationships = scala.collection.mutable.Map.empty[Thread, List[Thread]]
   }
 
   /** A value of type `A` obtained by a function that can suspend */
@@ -20,8 +28,81 @@ object sus4s {
     * @tparam A
     *   The type of the value returned by the job
     */
-  class Job[A] private[sus4s] (private val cf: CompletableFuture[A]) {
-    def value: A = cf.join()
+  class Job[A] private[sus4s] (
+      private val cf: CompletableFuture[A],
+      private val executingThread: CompletableFuture[Thread]
+  ) {
+
+    /** Returns the value of the job. If the job is not completed, the method blocks until the job
+      * completes. If the job is cancelled, the method throws an [[InterruptedException]].
+      * @return
+      *   The value of the job
+      */
+    def value: A =
+      try cf.get()
+      catch
+        case exex: ExecutionException => throw exex.getCause
+        case throwable: Throwable     => throw throwable
+
+    /** Waits for the completion of the job. If the job is cancelled, no exception is thrown.
+      */
+    def join(): Unit =
+      cf.handle((_, throwable) => {
+        throwable match {
+          case null                    => ()
+          case _: InterruptedException => ()
+          case _                       => throw throwable
+        }
+      })
+
+    /** Cancels the job and all its children jobs. Getting the value of a cancelled job throws an
+      * [[InterruptedException]]. Cancellation is an idempotent operation.
+     * 
+     * <h2>Example</h2>
+     * {{{
+     *   val expectedQueue = structured {
+     *   val queue = new ConcurrentLinkedQueue[String]()
+     *   val job1 = fork {
+     *     val innerJob = fork {
+     *       fork {
+     *         Thread.sleep(3000)
+     *         println("inner-inner-Job")
+     *         queue.add("inner-inner-Job")
+     *       }
+     *       Thread.sleep(2000)
+     *       println("innerJob")
+     *       queue.add("innerJob")
+     *     }
+     *     Thread.sleep(1000)
+     *     queue.add("job1")
+     *   }
+     *   val job = fork {
+     *     Thread.sleep(500)
+     *     job1.cancel()
+     *     queue.add("job2")
+     *   }
+     *   queue
+     * }
+     * expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+     * }}}
+      */
+    def cancel(): Suspend ?=> Unit = {
+      // FIXME Refactor this code
+      _cancel(executingThread.get(), summon[Suspend].asInstanceOf[SuspendScope].relationships)
+      cf.completeExceptionally(new InterruptedException("Job cancelled"))
+    }
+
+    private def _cancel(
+        thread: Thread,
+        relationships: scala.collection.mutable.Map[Thread, List[Thread]]
+    ): Unit = {
+      relationships.get(thread) match {
+        case Some(children) =>
+          children.foreach(_cancel(_, relationships))
+        case None => ()
+      }
+      thread.interrupt()
+    }
   }
 
   /** Executes a block of code applying structured concurrency to the contained suspendable tasks
@@ -65,27 +146,24 @@ object sus4s {
     *   The result of the block
     */
   inline def structured[A](inline block: Suspend ?=> A): A = {
-    val _scope = new StructuredTaskScope.ShutdownOnFailure()
-
-    given suspended: Suspend = new Suspend {
-      override val scope: StructuredTaskScope[Any] = _scope
-    }
+    val loomScope            = new ShutdownOnFailure()
+    given suspended: Suspend = SuspendScope(loomScope)
 
     try {
-      val mainTask = _scope.fork(() => {
+      val mainTask = loomScope.fork(() => {
         block
       })
-      _scope.join().throwIfFailed(identity)
+      loomScope.join().throwIfFailed(identity)
       mainTask.get()
     } finally {
-      _scope.close()
+      loomScope.close()
     }
   }
 
   /** Forks a new concurrent task executing the given block of code and returning a [[Job]] that
     * completes with the value of type `A`. The task is executed in a new Virtual Thread using the
-    * given [[Suspend]] context. The job is transparent to any exception thrown by the `block`, which
-    * means it rethrows the exception.
+    * given [[Suspend]] context. The job is transparent to any exception thrown by the `block`,
+    * which means it rethrows the exception.
     *
     * <h2>Example</h2>
     * {{{
@@ -109,14 +187,25 @@ object sus4s {
     *   [[structured]]
     */
   def fork[A](block: Suspend ?=> A): Suspend ?=> Job[A] = {
-    val result = new CompletableFuture[A]()
-    summon[Suspend].scope.fork(() => {
+    val result                     = new CompletableFuture[A]()
+    val executingThread            = new CompletableFuture[Thread]()
+    val suspendScope: SuspendScope = summon[Suspend].asInstanceOf[SuspendScope]
+    val parentThread: Thread       = Thread.currentThread()
+    suspendScope.scope.fork(() => {
+      val childThread = Thread.currentThread()
+      suspendScope.relationships.updateWith(parentThread) {
+        case None    => Some(List(childThread))
+        case Some(l) => Some(childThread :: l)
+      }
+      executingThread.complete(childThread)
       try result.complete(block)
       catch
+        case _: InterruptedException =>
+          result.completeExceptionally(new InterruptedException("Job cancelled"))
         case throwable: Throwable =>
           result.completeExceptionally(throwable)
           throw throwable;
     })
-    Job(result)
+    Job(result, executingThread)
   }
 }
