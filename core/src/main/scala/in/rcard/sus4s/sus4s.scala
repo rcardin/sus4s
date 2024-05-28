@@ -32,11 +32,20 @@ object sus4s {
       private val cf: CompletableFuture[A],
       private val executingThread: CompletableFuture[Thread]
   ) {
-    def value: A = try cf.get()
-    catch
-      case exex: ExecutionException => throw exex.getCause
-      case throwable: Throwable     => throw throwable
 
+    /** Returns the value of the job. If the job is not completed, the method blocks until the job
+      * completes. If the job is cancelled, the method throws an [[InterruptedException]].
+      * @return
+      *   The value of the job
+      */
+    def value: A =
+      try cf.get()
+      catch
+        case exex: ExecutionException => throw exex.getCause
+        case throwable: Throwable     => throw throwable
+
+    /** Waits for the completion of the job. If the job is cancelled, no exception is thrown.
+      */
     def join(): Unit =
       cf.handle((_, throwable) => {
         throwable match {
@@ -46,6 +55,37 @@ object sus4s {
         }
       })
 
+    /** Cancels the job and all its children jobs. Getting the value of a cancelled job throws an
+      * [[InterruptedException]]. Cancellation is an idempotent operation.
+     * 
+     * <h2>Example</h2>
+     * {{{
+     *   val expectedQueue = structured {
+     *   val queue = new ConcurrentLinkedQueue[String]()
+     *   val job1 = fork {
+     *     val innerJob = fork {
+     *       fork {
+     *         Thread.sleep(3000)
+     *         println("inner-inner-Job")
+     *         queue.add("inner-inner-Job")
+     *       }
+     *       Thread.sleep(2000)
+     *       println("innerJob")
+     *       queue.add("innerJob")
+     *     }
+     *     Thread.sleep(1000)
+     *     queue.add("job1")
+     *   }
+     *   val job = fork {
+     *     Thread.sleep(500)
+     *     job1.cancel()
+     *     queue.add("job2")
+     *   }
+     *   queue
+     * }
+     * expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+     * }}}
+      */
     def cancel(): Suspend ?=> Unit = {
       // FIXME Refactor this code
       _cancel(executingThread.get(), summon[Suspend].asInstanceOf[SuspendScope].relationships)

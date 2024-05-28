@@ -200,7 +200,6 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
         Thread.sleep(500)
         job1.cancel()
         queue.add("job2")
-        43
       }
       queue
     }
@@ -215,6 +214,20 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
       Thread.sleep(500)
       cancellable.cancel()
       cancellable.join()
+      42
+    }
+
+    expected shouldBe 42
+  }
+
+  it should "not throw any exception if a job is canceled twice" in {
+    val expected = structured {
+      val cancellable = fork {
+        Thread.sleep(2000)
+      }
+      Thread.sleep(500)
+      cancellable.cancel()
+      cancellable.cancel()
       42
     }
 
