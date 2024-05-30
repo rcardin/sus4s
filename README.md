@@ -5,7 +5,7 @@
 
 # sus4s 🎸🎶
 
-A Direct-Style Scala Wrapper Around the Structural Concurrency of Project Loom
+A Direct-Style Scala Wrapper Around the Structured Concurrency of Project Loom
 
 ## Dependency
 
@@ -19,7 +19,7 @@ The library is only available for Scala 3.
 
 ## Usage
 
-The library provides a direct-style API for the structured concurrency of Project Loom. The library requires JDK 21 and Scala 3. Moreover, Java preview features must be enabled in the Scala compiler.
+The library provides a direct-style API for Project Loom's structured concurrency. It requires JDK 21 and Scala 3. Moreover, Java preview features must be enabled in the Scala compiler.
 
 The main entry point is the `sus4s` package object. The following code snippet shows how to use the library:
 
@@ -40,9 +40,9 @@ val result: Int = structured {
 println(result) // 85
 ```
 
-The `structured` method creates a new structured concurrency scope represented by the `Suspend` trait. It's built on top of the `java.util.concurrent.StructuredTaskScope` class. Hence, the threads forked inside the `structured` block are Java Virtual Threads.
+The `structured` method creates a new structured concurrency scope represented by the `Suspend` trait. It's built on the `java.util.concurrent.StructuredTaskScope` class. Hence, the threads forked inside the `structured` block are Java Virtual Threads.
 
-The `fork` method creates a new Java Virtual Thread that executes the given block of code. The `fork` method executes functions declared with the capability of suspend:
+The `fork` method creates a new Java Virtual Thread that executes the given code block. The `fork` method executes functions declared with the capability of suspend:
 
 ```scala 3
 def findUserById(id: UserId): Suspend ?=> User
@@ -62,7 +62,7 @@ So, the above function can be rewritten as:
 def findUserById(id: UserId): Suspended[User]
 ```
 
-The `structured` function uses structured concurrency to run the suspendable tasks. In detail, it ensures that the thread executing the block waits for the completion of all the forked tasks. The structured blocks terminates when:
+The `structured` function uses structured concurrency to run the suspendable tasks. In detail, it ensures that the thread executing the block waits to complete all the forked tasks. The structured blocks terminate when:
 
 - all the forked tasks complete successfully
 - one of the forked tasks throws an exception
@@ -90,11 +90,11 @@ val job1: Job[Int] = fork {
 job1.join()
 ```
 
-The `structured` function is completely transparent to any exception thrown by the block or by any of the forked tasks.
+The `structured` function is entirely transparent to any exception thrown by the block or forked tasks.
 
 ## Canceling a Job
 
-It's possible to cancel a job by calling the `cancel` method on the `Job` instance. The following code snippet shows how:
+Canceling a job is possible by calling the `cancel` method on the `Job` instance. The following code snippet shows how:
 
 ```scala 3
 val queue = new ConcurrentLinkedQueue[String]()
@@ -121,9 +121,9 @@ queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
 result shouldBe 43
 ```
 
-Cancellation is collaborative. In the above example, the job `innerCancellableJob` is marked for cancellation by the call `innerCancellableJob.cancel()`. However, the job is not immediately canceled. The job is canceled when it reaches the first point operation that can be _interrupted_ by the JVM. Hence, cancellation is based upon the concept of interruption. In the above example, the `innerCancellableJob` is canceled when it reaches the `Thread.sleep(2000)` operation. If we remove the `Thread.sleep` operation, the job will never be canceled. A similar behavior is implemented by Kotlin coroutines (see [Kotlin Coroutines - A Comprehensive Introduction / Cancellation](https://blog.rockthejvm.com/kotlin-coroutines-101/#7-cancellation) for further details).
+Cancellation is collaborative. In the above example, the job `innerCancellableJob` is marked for cancellation by the call `innerCancellableJob.cancel()`. However, the job is not immediately canceled. The job is canceled when it reaches the first point operation that can be _interrupted_ by the JVM. Hence, cancellation is based on the concept of interruption. In the above example, the `innerCancellableJob` is canceled when it reaches the `Thread.sleep(2000)` operation. The job will never be canceled if we remove the `Thread.sleep` operation. A similar behavior is implemented by Kotlin coroutines (see [Kotlin Coroutines - A Comprehensive Introduction / Cancellation](https://blog.rockthejvm.com/kotlin-coroutines-101/#7-cancellation) for further details).
 
-Cancelling a job follows the relationship between parent and child jobs. If a parent job is canceled, all the child jobs are canceled as well:
+Cancelling a job follows the relationship between parent and child jobs. If a parent's job is canceled, all the children's jobs are canceled as well:
 
 ```scala 3
 val expectedQueue = structured {
@@ -153,7 +153,7 @@ val expectedQueue = structured {
 expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
 ```
 
-Trying to get the value from a canceled job will throw a `InterruptedException`. However, joining a canceled job will not throw any exception.
+Trying to get the value from a canceled job will throw an `InterruptedException`. However, joining a canceled job will not throw any exception.
 
 **You won't pay any additional cost for canceling a job**. The cancellation mechanism is based on the interruption of the virtual thread. No new structured scope is created for the cancellation mechanism.
 
