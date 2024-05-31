@@ -1,9 +1,23 @@
-![GitHub Workflow Status (with branch)](https://img.shields.io/github/actions/workflow/status/rcardin/sus4s/scala.yml?branch=main)
-![Maven Central](https://img.shields.io/maven-central/v/in.rcard.sus4s/core_3)
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/rcardin/sus4s)
-[![javadoc](https://javadoc.io/badge2/in.rcard.sus4s/core_3/javadoc.svg)](https://javadoc.io/doc/in.rcard.sus4s/core_3)
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/rcardin/sus4s/assets/16861531/ff6ff1fb-fb9f-45fc-a933-59d0036d4a60">
+    <source media="(prefers-color-scheme: light)" srcset="https://github.com/rcardin/sus4s/assets/16861531/be98576b-e5c3-443b-9b67-cf291ecd7b79">
+    <img alt="sus4s: A Direct-Style Scala Wrapper around the Structured Concurrency of Project Loom"
+         src="https://github.com/rcardin/sus4s/assets/16861531/ff6ff1fb-fb9f-45fc-a933-59d0036d4a60"
+         width="20%">
+  </picture>
+  <br/><br/>
+  <div>
+    <img src="https://img.shields.io/github/actions/workflow/status/rcardin/sus4s/scala.yml?branch=main" alt="GitHub Workflow Status (with branch)">
+    <img src="https://img.shields.io/maven-central/v/in.rcard.sus4s/core_3" alt="Maven Central">
+    <img src="https://img.shields.io/github/v/release/rcardin/sus4s" alt="GitHub release (latest by date)">
+    <a href="https://javadoc.io/doc/in.rcard.sus4s/core_3">
+      <img src="https://javadoc.io/badge2/in.rcard.sus4s/core_3/javadoc.svg" alt="javadoc">
+    </a>
+  </div>
+</div>  
 
-# sus4s 🎸🎶
+# sus4s
 
 A Direct-Style Scala Wrapper Around the Structured Concurrency of Project Loom
 
