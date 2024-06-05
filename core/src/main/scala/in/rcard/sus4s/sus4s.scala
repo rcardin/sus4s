@@ -3,6 +3,7 @@ package in.rcard.sus4s
 import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure
 import java.util.concurrent.{CompletableFuture, StructuredTaskScope}
 import scala.concurrent.ExecutionException
+import scala.concurrent.duration.Duration
 
 object sus4s {
 
@@ -207,5 +208,14 @@ object sus4s {
           throw throwable;
     })
     Job(result, executingThread)
+  }
+  
+  /** Suspends the execution of the current thread for the given duration.
+    *
+    * @param duration
+    *   The duration to suspend the execution
+    */
+  def delay(duration: Duration): Suspend ?=> Unit = {
+    Thread.sleep(duration.toMillis)
   }
 }

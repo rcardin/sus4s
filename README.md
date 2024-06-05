@@ -39,14 +39,15 @@ The main entry point is the `sus4s` package object. The following code snippet s
 
 ```scala 3
 import in.rcard.sus4s.sus4s.*
+import scala.concurrent.duration.*
 
 val result: Int = structured {
   val job1: Job[Int] = fork {
-    Thread.sleep(1000)
+    delay(1.second)
     42
   }
   val job2: Job[Int] = fork {
-    Thread.sleep(500)
+    delay(500.millis)
     43
   }
   job1.value + job2.value
@@ -88,7 +89,7 @@ Forking a suspendable function means creating a new virtual thread that executes
 
 ```scala 3
 val job1: Job[Int] = fork {
-  Thread.sleep(1000)
+  delay(1.second)
   42
 }
 val meaningOfLife: Int = job1.value
@@ -98,7 +99,7 @@ If you're not interested in the result of the function, you can use the `join` m
 
 ```scala 3
 val job1: Job[Int] = fork {
-  Thread.sleep(1000)
+  delay(1.second)
   println("The meaning of life is 42")
 }
 job1.join()
@@ -116,16 +117,16 @@ val result = structured {
   val job1 = fork {
     val innerCancellableJob = fork {
       while (true) {
-        Thread.sleep(2000)
+        delay(2.seconds)
         queue.add("cancellable")
       }
     }
-    Thread.sleep(1000)
+    delay(1.second)
     innerCancellableJob.cancel()
     queue.add("job1")
   }
   val job = fork {
-    Thread.sleep(500)
+    delay(500.millis)
     queue.add("job2")
     43
   }
@@ -135,7 +136,7 @@ queue.toArray should contain theSameElementsInOrderAs List("job2", "job1")
 result shouldBe 43
 ```
 
-Cancellation is collaborative. In the above example, the job `innerCancellableJob` is marked for cancellation by the call `innerCancellableJob.cancel()`. However, the job is not immediately canceled. The job is canceled when it reaches the first point operation that can be _interrupted_ by the JVM. Hence, cancellation is based on the concept of interruption. In the above example, the `innerCancellableJob` is canceled when it reaches the `Thread.sleep(2000)` operation. The job will never be canceled if we remove the `Thread.sleep` operation. A similar behavior is implemented by Kotlin coroutines (see [Kotlin Coroutines - A Comprehensive Introduction / Cancellation](https://blog.rockthejvm.com/kotlin-coroutines-101/#7-cancellation) for further details).
+Cancellation is collaborative. In the above example, the job `innerCancellableJob` is marked for cancellation by the call `innerCancellableJob.cancel()`. However, the job is not immediately canceled. The job is canceled when it reaches the first point operation that can be _interrupted_ by the JVM. Hence, cancellation is based on the concept of interruption. In the above example, the `innerCancellableJob` is canceled when it reaches the `delay(2.seconds)` operation. The job will never be canceled if we remove the `delay` operation. A similar behavior is implemented by Kotlin coroutines (see [Kotlin Coroutines - A Comprehensive Introduction / Cancellation](https://blog.rockthejvm.com/kotlin-coroutines-101/#7-cancellation) for further details).
 
 Cancelling a job follows the relationship between parent and child jobs. If a parent's job is canceled, all the children's jobs are canceled as well:
 
@@ -145,19 +146,19 @@ val expectedQueue = structured {
   val job1 = fork {
     val innerJob = fork {
       fork {
-        Thread.sleep(3000)
+        delay(3.seconds)
         println("inner-inner-Job")
         queue.add("inner-inner-Job")
       }
-      Thread.sleep(2000)
+      delay(2.seconds)
       println("innerJob")
       queue.add("innerJob")
     }
-    Thread.sleep(1000)
+    delay(1.second)
     queue.add("job1")
   }
   val job = fork {
-    Thread.sleep(500)
+    delay(500.millis)
     job1.cancel()
     queue.add("job2")
     43
