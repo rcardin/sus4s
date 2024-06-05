@@ -1,10 +1,11 @@
 import in.rcard.sus4s.sus4s
-import in.rcard.sus4s.sus4s.{fork, structured}
+import in.rcard.sus4s.sus4s.{delay, fork, structured}
 import org.scalatest.TryValues.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.util.concurrent.ConcurrentLinkedQueue
+import scala.concurrent.duration.*
 import scala.util.Try
 
 class StructuredSpec extends AnyFlatSpec with Matchers {
@@ -13,15 +14,15 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     val results = structured {
       val queue = new ConcurrentLinkedQueue[String]()
       val job1 = fork {
-        Thread.sleep(1000)
+        delay(1.second)
         queue.add("job1")
       }
       val job2 = fork {
-        Thread.sleep(500)
+        delay(500.millis)
         queue.add("job2")
       }
       val job3 = fork {
-        Thread.sleep(100)
+        delay(100.millis)
         queue.add("job3")
       }
       queue
@@ -35,16 +36,16 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     val tryResult = Try {
       structured {
         val job1 = fork {
-          Thread.sleep(1000)
+          delay(1.second)
           results.add("job1")
         }
         val job2 = fork {
-          Thread.sleep(500)
+          delay(500.millis)
           results.add("job2")
           throw new RuntimeException("Error")
         }
         val job3 = fork {
-          Thread.sleep(100)
+          delay(100.millis)
           results.add("job3")
         }
       }
@@ -60,15 +61,15 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     val tryResult = Try {
       structured {
         val job1 = fork {
-          Thread.sleep(1000)
+          delay(1.second)
           results.add("job1")
         }
         val job2 = fork {
-          Thread.sleep(500)
+          delay(500.millis)
           results.add("job2")
         }
         val job3 = fork {
-          Thread.sleep(100)
+          delay(100.millis)
           results.add("job3")
         }
         throw new RuntimeException("Error")
@@ -84,12 +85,12 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     val queue = new ConcurrentLinkedQueue[String]()
     val result = structured {
       val job1 = fork {
-        Thread.sleep(1000)
+        delay(1.second)
         queue.add("job1")
         42
       }
       val job2 = fork {
-        Thread.sleep(500)
+        delay(500.millis)
         queue.add("job2")
         43
       }
@@ -105,11 +106,11 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
       val queue = new ConcurrentLinkedQueue[String]()
       val job1 = fork {
         fork {
-          Thread.sleep(1000)
+          delay(1.second)
           queue.add("1")
         }
         fork {
-          Thread.sleep(500)
+          delay(500.millis)
           queue.add("2")
         }
         queue.add("3")
@@ -124,11 +125,11 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     val expectedQueue = structured {
       val queue = new ConcurrentLinkedQueue[String]()
       val cancellable = fork {
-        Thread.sleep(2000)
+        delay(2.seconds)
         queue.add("cancellable")
       }
       val job = fork {
-        Thread.sleep(500)
+        delay(500.millis)
         cancellable.cancel()
         queue.add("job2")
       }
@@ -142,11 +143,11 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     val expectedQueue = structured {
       val queue = new ConcurrentLinkedQueue[String]()
       val cancellable = fork {
-        Thread.sleep(2000)
+        delay(2.seconds)
         queue.add("cancellable")
       }
       val job = fork {
-        Thread.sleep(500)
+        delay(500.millis)
         cancellable.cancel()
         queue.add("job2")
       }
@@ -162,15 +163,15 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
       val queue = new ConcurrentLinkedQueue[String]()
       val job1 = fork {
         val innerCancellableJob = fork {
-          Thread.sleep(2000)
+          delay(2.seconds)
           queue.add("cancellable")
         }
-        Thread.sleep(1000)
+        delay(1.second)
         innerCancellableJob.cancel()
         queue.add("job1")
       }
       val job = fork {
-        Thread.sleep(500)
+        delay(500.millis)
         queue.add("job2")
       }
       queue
@@ -184,20 +185,20 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
       val job1 = fork {
         val innerJob = fork {
           fork {
-            Thread.sleep(3000)
+            delay(3.seconds)
             println("inner-inner-Job")
             queue.add("inner-inner-Job")
           }
 
-          Thread.sleep(2000)
+          delay(2.seconds)
           println("innerJob")
           queue.add("innerJob")
         }
-        Thread.sleep(1000)
+        delay(1.second)
         queue.add("job1")
       }
       val job = fork {
-        Thread.sleep(500)
+        delay(500.millis)
         job1.cancel()
         queue.add("job2")
       }
@@ -209,9 +210,9 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
   it should "not throw any exception when joining a cancelled job" in {
     val expected = structured {
       val cancellable = fork {
-        Thread.sleep(2000)
+        delay(2.seconds)
       }
-      Thread.sleep(500)
+      delay(500.millis)
       cancellable.cancel()
       cancellable.join()
       42
@@ -223,9 +224,9 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
   it should "not throw any exception if a job is canceled twice" in {
     val expected = structured {
       val cancellable = fork {
-        Thread.sleep(2000)
+        delay(2.seconds)
       }
-      Thread.sleep(500)
+      delay(500.millis)
       cancellable.cancel()
       cancellable.cancel()
       42
@@ -238,9 +239,9 @@ class StructuredSpec extends AnyFlatSpec with Matchers {
     assertThrows[InterruptedException] {
       structured {
         val cancellable = fork {
-          Thread.sleep(2000)
+          delay(2.seconds)
         }
-        Thread.sleep(500)
+        delay(500.millis)
         cancellable.cancel()
         cancellable.value
       }
