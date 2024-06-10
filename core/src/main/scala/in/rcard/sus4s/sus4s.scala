@@ -218,4 +218,6 @@ object sus4s {
   def delay(duration: Duration): Suspend ?=> Unit = {
     Thread.sleep(duration.toMillis)
   }
+  
+  def race[A, B](firstBlock: Suspend ?=> A, secondBlock: Suspend ?=> B): Suspend ?=> A | B = ???
 }
