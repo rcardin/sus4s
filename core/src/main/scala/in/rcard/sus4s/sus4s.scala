@@ -1,6 +1,6 @@
 package in.rcard.sus4s
 
-import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure
+import java.util.concurrent.StructuredTaskScope.{ShutdownOnFailure, ShutdownOnSuccess}
 import java.util.concurrent.{CompletableFuture, StructuredTaskScope}
 import scala.concurrent.ExecutionException
 import scala.concurrent.duration.Duration
@@ -58,34 +58,34 @@ object sus4s {
 
     /** Cancels the job and all its children jobs. Getting the value of a cancelled job throws an
       * [[InterruptedException]]. Cancellation is an idempotent operation.
-     * 
-     * <h2>Example</h2>
-     * {{{
-     *   val expectedQueue = structured {
-     *   val queue = new ConcurrentLinkedQueue[String]()
-     *   val job1 = fork {
-     *     val innerJob = fork {
-     *       fork {
-     *         Thread.sleep(3000)
-     *         println("inner-inner-Job")
-     *         queue.add("inner-inner-Job")
-     *       }
-     *       Thread.sleep(2000)
-     *       println("innerJob")
-     *       queue.add("innerJob")
-     *     }
-     *     Thread.sleep(1000)
-     *     queue.add("job1")
-     *   }
-     *   val job = fork {
-     *     Thread.sleep(500)
-     *     job1.cancel()
-     *     queue.add("job2")
-     *   }
-     *   queue
-     * }
-     * expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
-     * }}}
+      *
+      * <h2>Example</h2>
+      * {{{
+      *   val expectedQueue = structured {
+      *   val queue = new ConcurrentLinkedQueue[String]()
+      *   val job1 = fork {
+      *     val innerJob = fork {
+      *       fork {
+      *         Thread.sleep(3000)
+      *         println("inner-inner-Job")
+      *         queue.add("inner-inner-Job")
+      *       }
+      *       Thread.sleep(2000)
+      *       println("innerJob")
+      *       queue.add("innerJob")
+      *     }
+      *     Thread.sleep(1000)
+      *     queue.add("job1")
+      *   }
+      *   val job = fork {
+      *     Thread.sleep(500)
+      *     job1.cancel()
+      *     queue.add("job2")
+      *   }
+      *   queue
+      * }
+      * expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+      * }}}
       */
     def cancel(): Suspend ?=> Unit = {
       // FIXME Refactor this code
@@ -209,7 +209,7 @@ object sus4s {
     })
     Job(result, executingThread)
   }
-  
+
   /** Suspends the execution of the current thread for the given duration.
     *
     * @param duration
@@ -218,6 +218,17 @@ object sus4s {
   def delay(duration: Duration): Suspend ?=> Unit = {
     Thread.sleep(duration.toMillis)
   }
-  
-  def race[A, B](firstBlock: Suspend ?=> A, secondBlock: Suspend ?=> B): Suspend ?=> A | B = ???
+
+  def race[A, B](firstBlock: Suspend ?=> A, secondBlock: Suspend ?=> B): Suspend ?=> A | B = {
+    val loomScope = new ShutdownOnSuccess[A | B]()
+    try {
+      loomScope.fork(() => { firstBlock })
+      loomScope.fork(() => { secondBlock })
+      
+      loomScope.join()
+      loomScope.result(identity)
+    } finally {
+      loomScope.close()
+    }
+  }
 }
