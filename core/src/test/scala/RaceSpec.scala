@@ -112,4 +112,28 @@ class RaceSpec extends AnyFlatSpec with Matchers {
 
     actual should be("42")
   }
+
+  it should "honor the structured concurrency and cancel all the children jobs" in {
+    val results = new ConcurrentLinkedQueue[String]()
+    val actual: Int | String = structured {
+      race(
+        {
+          val job1 = fork {
+            delay(1.seconds)
+            results.add("job1")
+          }
+          42
+        }, {
+          delay(500.millis)
+          results.add("job2")
+          "42"
+        }
+      )
+    }
+
+    Thread.sleep(2000)
+
+    actual should be("42")
+    results.toArray should contain theSameElementsInOrderAs List("job2")
+  }
 }
