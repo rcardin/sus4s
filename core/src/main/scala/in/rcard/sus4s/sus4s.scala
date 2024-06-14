@@ -1,6 +1,6 @@
 package in.rcard.sus4s
 
-import java.util.concurrent.StructuredTaskScope.ShutdownOnFailure
+import java.util.concurrent.StructuredTaskScope.{ShutdownOnFailure, ShutdownOnSuccess}
 import java.util.concurrent.{CompletableFuture, StructuredTaskScope}
 import scala.concurrent.ExecutionException
 import scala.concurrent.duration.Duration
@@ -58,34 +58,34 @@ object sus4s {
 
     /** Cancels the job and all its children jobs. Getting the value of a cancelled job throws an
       * [[InterruptedException]]. Cancellation is an idempotent operation.
-     * 
-     * <h2>Example</h2>
-     * {{{
-     *   val expectedQueue = structured {
-     *   val queue = new ConcurrentLinkedQueue[String]()
-     *   val job1 = fork {
-     *     val innerJob = fork {
-     *       fork {
-     *         Thread.sleep(3000)
-     *         println("inner-inner-Job")
-     *         queue.add("inner-inner-Job")
-     *       }
-     *       Thread.sleep(2000)
-     *       println("innerJob")
-     *       queue.add("innerJob")
-     *     }
-     *     Thread.sleep(1000)
-     *     queue.add("job1")
-     *   }
-     *   val job = fork {
-     *     Thread.sleep(500)
-     *     job1.cancel()
-     *     queue.add("job2")
-     *   }
-     *   queue
-     * }
-     * expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
-     * }}}
+      *
+      * <h2>Example</h2>
+      * {{{
+      *   val expectedQueue = structured {
+      *   val queue = new ConcurrentLinkedQueue[String]()
+      *   val job1 = fork {
+      *     val innerJob = fork {
+      *       fork {
+      *         Thread.sleep(3000)
+      *         println("inner-inner-Job")
+      *         queue.add("inner-inner-Job")
+      *       }
+      *       Thread.sleep(2000)
+      *       println("innerJob")
+      *       queue.add("innerJob")
+      *     }
+      *     Thread.sleep(1000)
+      *     queue.add("job1")
+      *   }
+      *   val job = fork {
+      *     Thread.sleep(500)
+      *     job1.cancel()
+      *     queue.add("job2")
+      *   }
+      *   queue
+      * }
+      * expectedQueue.toArray should contain theSameElementsInOrderAs List("job2")
+      * }}}
       */
     def cancel(): Suspend ?=> Unit = {
       // FIXME Refactor this code
@@ -199,8 +199,11 @@ object sus4s {
         case Some(l) => Some(childThread :: l)
       }
       executingThread.complete(childThread)
-      try result.complete(block)
-      catch
+      try {
+        val resultValue = block
+        result.complete(resultValue)
+        resultValue
+      } catch
         case _: InterruptedException =>
           result.completeExceptionally(new InterruptedException("Job cancelled"))
         case throwable: Throwable =>
@@ -209,7 +212,7 @@ object sus4s {
     })
     Job(result, executingThread)
   }
-  
+
   /** Suspends the execution of the current thread for the given duration.
     *
     * @param duration
@@ -217,5 +220,57 @@ object sus4s {
     */
   def delay(duration: Duration): Suspend ?=> Unit = {
     Thread.sleep(duration.toMillis)
+  }
+
+  /** Races two concurrent tasks and returns the result of the first one that completes. The other
+    * task is cancelled. If the first task throws an exception, it waits for the end of the second
+    * task. If both tasks throw an exception, the first one is rethrown.
+    *
+    * Each block follows the [[structured]] concurrency model. So, for each block, a new virtual
+    * thread is created more than the thread forking the block.
+    *
+    * <h2>Example</h2>
+    * {{{
+    * val results = new ConcurrentLinkedQueue[String]()
+    * val actual: Int | String = structured {
+    *   race[Int, String](
+    *     {
+    *       delay(1.second)
+    *       results.add("job1")
+    *       throw new RuntimeException("Error")
+    *     }, {
+    *       delay(500.millis)
+    *       results.add("job2")
+    *       "42"
+    *     }
+    *   )
+    * }
+    * actual should be("42")
+    * results.toArray should contain theSameElementsInOrderAs List("job2")
+    * }}}
+    *
+    * @param firstBlock
+    *   First block to race
+    * @param secondBlock
+    *   Second block to race
+    * @tparam A
+    *   Result type of the first block
+    * @tparam B
+    *   Result type of the second block
+    * @return
+    *   The result of the first block that completes
+    */
+  def race[A, B](firstBlock: Suspend ?=> A, secondBlock: Suspend ?=> B): Suspend ?=> A | B = {
+    val loomScope            = new ShutdownOnSuccess[A | B]()
+    given suspended: Suspend = SuspendScope(loomScope.asInstanceOf[StructuredTaskScope[Any]])
+    try {
+      loomScope.fork(() => { structured { firstBlock } })
+      loomScope.fork(() => { structured { secondBlock } })
+
+      loomScope.join()
+      loomScope.result(identity)
+    } finally {
+      loomScope.close()
+    }
   }
 }

@@ -172,6 +172,33 @@ Trying to get the value from a canceled job will throw an `InterruptedException`
 
 **You won't pay any additional cost for canceling a job**. The cancellation mechanism is based on the interruption of the virtual thread. No new structured scope is created for the cancellation mechanism.
 
+## Racing Jobs
+
+The library provides the `race` method to race two jobs. The `race` function returns the result of the first job that completes. The other job is canceled. The following code snippet shows how to use the `race` method:
+
+```scala 3
+val results = new ConcurrentLinkedQueue[String]()
+val actual: Int | String = structured {
+  race[Int, String](
+    {
+      delay(1.second)
+      results.add("job1")
+      throw new RuntimeException("Error")
+    }, {
+      delay(500.millis)
+      results.add("job2")
+      "42"
+    }
+  )
+}
+actual should be("42")
+results.toArray should contain theSameElementsInOrderAs List("job2")
+```
+
+If the first job completes with an exception, the `race` method waits for the second job to complete. and returns the result of the second job. If the second job completes with an exception, the `race` method throws the first exception it encountered.
+
+Each job adhere to the rules of structured concurrency. The `race` function is optimized. Every raced block creates more than one virtual thread under the hood, which should not be a problem for the Loom runtime.
+
 ## Contributing
 
 If you want to contribute to the project, please do it! Any help is welcome.
