@@ -1,4 +1,4 @@
-import in.rcard.sus4s.sus4s.{delay, race, structured}
+import in.rcard.sus4s.sus4s.{delay, fork, race, structured}
 import org.scalatest.TryValues.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,7 +11,7 @@ class RaceSpec extends AnyFlatSpec with Matchers {
   "Racing two functions" should "return the result of the first one that completes and cancel the execution of the other" in {
     val results = new ConcurrentLinkedQueue[String]()
     val actual: Int | String = structured {
-      race(
+      race[Int, String](
         {
           delay(1.second)
           results.add("job1")
@@ -29,10 +29,38 @@ class RaceSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "return the result of the second one if the first one throws an exception" in {
+    val results = new ConcurrentLinkedQueue[String]()
     val actual: Int | String = structured {
       race(
         {
           delay(1.second)
+          results.add("job1")
+          42
+        }, {
+          delay(500.millis)
+          results.add("job2")
+          throw new RuntimeException("Error")
+        }
+      )
+    }
+
+    actual should be(42)
+    results.toArray should contain theSameElementsInOrderAs List("job2", "job1")
+  }
+
+  it should "honor the structural concurrency and wait for all the jobs to complete" in {
+    val results = new ConcurrentLinkedQueue[String]()
+    val actual: Int | String = structured {
+      race(
+        {
+          val job1 = fork {
+            fork {
+                delay(2.second)
+                results.add("job3")
+            }
+            delay(1.second)
+            results.add("job1")
+          }
           42
         }, {
           delay(500.millis)
@@ -42,6 +70,7 @@ class RaceSpec extends AnyFlatSpec with Matchers {
     }
 
     actual should be(42)
+    results.toArray should contain theSameElementsInOrderAs List("job1", "job3")
   }
 
   it should "throw the exception thrown by the first function both throw an exception" in {
@@ -61,5 +90,26 @@ class RaceSpec extends AnyFlatSpec with Matchers {
 
     expectedResult.failure.exception shouldBe a[RuntimeException]
     expectedResult.failure.exception.getMessage shouldBe "Error in job2"
+  }
+
+  it should "honor the structural concurrency and return the value of the second function if the first threw an exception" in {
+    val actual: Int | String = structured {
+      race(
+        {
+          val job1 = fork {
+            delay(500.millis)
+            println("job1")
+            throw new RuntimeException("Error in job1")
+          }
+          42
+        }, {
+          delay(1.second)
+          println("job2")
+          "42"
+        }
+      )
+    }
+
+    actual should be("42")
   }
 }

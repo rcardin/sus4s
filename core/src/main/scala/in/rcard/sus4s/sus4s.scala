@@ -199,8 +199,11 @@ object sus4s {
         case Some(l) => Some(childThread :: l)
       }
       executingThread.complete(childThread)
-      try result.complete(block)
-      catch
+      try {
+        val resultValue = block
+        result.complete(resultValue)
+        resultValue
+      } catch
         case _: InterruptedException =>
           result.completeExceptionally(new InterruptedException("Job cancelled"))
         case throwable: Throwable =>
@@ -219,12 +222,51 @@ object sus4s {
     Thread.sleep(duration.toMillis)
   }
 
+  /** Races two concurrent tasks and returns the result of the first one that completes. The other
+    * task is cancelled. If the first task throws an exception, it waits for the end of the second
+    * task. If both tasks throw an exception, the first one is rethrown.
+    *
+    * Each block follows the [[structured]] concurrency model. So, for each block, a new virtual
+    * thread is created more than the thread forking the block.
+    *
+    * <h2>Example</h2>
+    * {{{
+    * val results = new ConcurrentLinkedQueue[String]()
+    * val actual: Int | String = structured {
+    *   race[Int, String](
+    *     {
+    *       delay(1.second)
+    *       results.add("job1")
+    *       throw new RuntimeException("Error")
+    *     }, {
+    *       delay(500.millis)
+    *       results.add("job2")
+    *       "42"
+    *     }
+    *   )
+    * }
+    * actual should be("42")
+    * results.toArray should contain theSameElementsInOrderAs List("job2")
+    * }}}
+    *
+    * @param firstBlock
+    *   First block to race
+    * @param secondBlock
+    *   Second block to race
+    * @tparam A
+    *   Result type of the first block
+    * @tparam B
+    *   Result type of the second block
+    * @return
+    *   The result of the first block that completes
+    */
   def race[A, B](firstBlock: Suspend ?=> A, secondBlock: Suspend ?=> B): Suspend ?=> A | B = {
-    val loomScope = new ShutdownOnSuccess[A | B]()
+    val loomScope            = new ShutdownOnSuccess[A | B]()
+    given suspended: Suspend = SuspendScope(loomScope.asInstanceOf[StructuredTaskScope[Any]])
     try {
-      loomScope.fork(() => { firstBlock })
-      loomScope.fork(() => { secondBlock })
-      
+      loomScope.fork(() => { structured { firstBlock } })
+      loomScope.fork(() => { structured { secondBlock } })
+
       loomScope.join()
       loomScope.result(identity)
     } finally {
