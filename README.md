@@ -178,7 +178,7 @@ The library provides the `race` method to race two jobs. The `race` function ret
 
 ```scala 3
 val results = new ConcurrentLinkedQueue[String]()
-val actual: Int | String = structured {
+val actual: Int | String = 
   race[Int, String](
     {
       delay(1.second)
@@ -190,7 +190,6 @@ val actual: Int | String = structured {
       "42"
     }
   )
-}
 actual should be("42")
 results.toArray should contain theSameElementsInOrderAs List("job2")
 ```

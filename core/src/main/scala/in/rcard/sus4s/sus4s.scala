@@ -232,7 +232,7 @@ object sus4s {
     * <h2>Example</h2>
     * {{{
     * val results = new ConcurrentLinkedQueue[String]()
-    * val actual: Int | String = structured {
+    * val actual: Int | String =
     *   race[Int, String](
     *     {
     *       delay(1.second)
@@ -244,7 +244,6 @@ object sus4s {
     *       "42"
     *     }
     *   )
-    * }
     * actual should be("42")
     * results.toArray should contain theSameElementsInOrderAs List("job2")
     * }}}
@@ -260,7 +259,7 @@ object sus4s {
     * @return
     *   The result of the first block that completes
     */
-  def race[A, B](firstBlock: Suspend ?=> A, secondBlock: Suspend ?=> B): Suspend ?=> A | B = {
+  def race[A, B](firstBlock: Suspend ?=> A, secondBlock: Suspend ?=> B): A | B = {
     val loomScope            = new ShutdownOnSuccess[A | B]()
     given suspended: Suspend = SuspendScope(loomScope.asInstanceOf[StructuredTaskScope[Any]])
     try {
