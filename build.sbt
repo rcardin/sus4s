@@ -1,6 +1,6 @@
 import scala.collection.Seq
 
-val scala3Version = "3.4.2"
+val scala3Version = "3.6.1"
 
 inThisBuild(
   List(
